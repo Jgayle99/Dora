@@ -1,0 +1,117 @@
+Notes on my experiences with running the various pre-processing scripts.
+
+I am new to pretty much everything involved for gen ai, machine learning, etc. 
+so there may be a better way to do a lot of the things I have put together to prep for training a DIT model. 
+I tried use multithreading and multiple processes where I could add it to speed up the work. There is room for 
+improvement on a lot of that. I plan to work on these scripts to improve them as I get to the point of needed 
+to pre process larger data sets.  
+
+I chose around 15k meshes to start with for the fine tuning of the Dora-VAE and the training of a DIT model 
+for an image to mesh pipeline. I am still working on designing a DIT model and training pipeline for this. 
+The meshes I chose are from a large collection of 3d printable models that I have purchased commercial rights 
+for over the last few years. 
+
+Hopefully my notes / scripts will help others who are looking to train a DIT model or pre process a bunch of meshes. 
+They work in my environment, but might require some tinkering for using in other setups. You will want to provide 
+the correct paths to the scripts or move them to the appropriate folders before running them. 
+
+Ran all of these on my PC:
+OS:         Windows 11 Pro
+Processor:	Intel Ultra 9 285K   3.70 GHz
+RAM: 	    128 GB 
+GPU:        MSI Ventus 3x OC 3090 24GB
+
+These notes all apply to preprocessing the meshes for a 256 resolution.
+
+Total meshes: 14,752
+Total storage space for the pre-processed files: 1.6TB (includes the files shown at the end of the notes)
+Total time to process the meshes: 5-6 days
+
+Watertight/Normalizing
+    - multi_threaded_to_watertight_mesh.py
+    - About 1-2 days to finish this stage + the Sharp Edge Sampling.  
+
+Sharp Edge Sampling
+    - sharp_sample_wrapper.py + modified_sharp_sample.py 
+
+Renders 
+    - After using the blender based scripts and thinking it was too slow, I redid the rendering without blender. 
+    - fast_render.py + view_utils.py (non Blender scripts - numpy, OpenGL, OpenCV, trimesh, and PIL)
+        - These should get through the entire stack of meshes in 10% of the time that the Blender based script does
+        - The output from this script takes up only about 10% of the storage space since I'm saving those as png files
+        - I Still just have the sequential processing for this, concurrent processing version coming soon
+    - render_wrapper.py + render_script.py (These use Blender, which is kind of slow)
+        - 2 1/2 days running with 8 workers 
+        - I couldn't figure out how to push more of this to the 3090
+        - The script as it is put my 3090 at around 20% usage
+        - The integrated GPU was near 100% the entire time
+        - The CPU usage sat pretty low
+        - Might be faster with a different approach
+        - Not sure about the normal map renders either, seems to be shadows in the scene for those
+        - Renders are a bottleneck and take a lot more storage space than the other pre-processed parts
+    - I went with 36 views for these, one render of the normal map, one render of the depth map for each view
+
+Feature Extraction 
+    - feature_extraction.py 
+    - 12 hours running with 8 threads 
+    - You will need to get one of the pre-trained dinov2 models
+    - I used this model: dinov2-with-registers-large
+
+Latent Samples 
+    - multi_thread_latent_extraction.py
+    - 1 hour running with 8 threads 
+    - Heaviest on the GPU - 100% usage but only around 5.5GB of VRAM
+    - CPU was sitting high too off and on, 20% - 90%
+
+Various folder and file organizing
+    - move_npz_files.py
+    - move_ply_files.py
+    - copy_obj_to_render_folders.py
+    - rename_folders.py
+    - rename_meshes.py
+    - rename_processed_files.py
+    - fix_unmatched_claims.py - temporary script to fix up the race to process files in modified_sharp_sample.py, 
+                                need to redo in a similar way to the render_wrapper to handle the queue of work
+
+Various other scripts to test things
+    - test_load.py (test loading the dinov2 model)
+    - inspect_pt.py (test that the output from the dinov2 model has content)
+
+TODO    
+    - Research better rendering methods and rewrite that script. 
+    - Design a DIT and training pipeline
+    - Fine tune the pre-trained dora-VAE model 
+    - Train a dora-VAE from scratch with my input meshes 
+    - Train the DIT model 
+    - Preprocess the meshes again at multiple higher resolutions for progressive training of the VAE and DIT models 
+    - Combine all of the preprocessing scripts 
+    - Get all of the input files paths / types from the various scripts in line with each other
+
+Processed files folder structure (end goal would be to have multiple resolutions of all these for each mesh):
+
+# d/processed/
+# ├── meshName/
+# │   ├── meshName.obj (original mesh, could be obj/stl/glb/ etc)
+# │   └── 256_meshName/
+# │       ├── 256_meshName_normalized.obj (processed mesh from watertight_mesh.py)
+# │       ├── 256_meshName_sharp_sample.ply (output from sharp_edge_sampling)
+# │       ├── 256_meshName_sample_points.npz (output from sharp_edge_sampling)
+# │       ├── 256_meshName_latent_sample.npy (output from Dora-VAE - just the shape latents from the tuple) 
+# │       ├── 256_meshName_view_000_dinov2_features.pt (one per view, npy for faster loading during training)
+# │       ├── 256_meshName_view_000_depth_features.pt (from DINOv2 using the depth map render from this view)
+# │       ├── 256_meshName_view_000_normal_features.pt (from DINOv2 using the normal map render from this view)
+# │       ├── 256_meshName_view_000_depth.exr (rendered depth map of the view)
+# │       ├── 256_meshName_view_000_normal.exr (rendered normal map of the view)
+# │       ├── 256_meshName_view_001_depth.exr
+# │       ├── 256_meshName_view_001_normal.exr
+# │       ├── 256_meshName_view_001_depth_features.pt
+# │       ├── 256_meshName_view_001_normal_features.pt 
+# │       └── ... (up to 256_meshName_view_036_depth.exr/normal.exr/_features.npy/etc )
+# ├── mesh_0002/
+# │   ├── meshName.obj
+# │   └── 256_meshName/
+# │         └── ... 
+# └── ... 
+
+
+
