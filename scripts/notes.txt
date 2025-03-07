@@ -15,6 +15,11 @@ Hopefully my notes / scripts will help others who are looking to train a DIT mod
 They work in my environment, but might require some tinkering for using in other setups. You will want to provide 
 the correct paths to the scripts or move them to the appropriate folders before running them. 
 
+** To get more of the processing to the correct GPU, open up Windows graphics settings, add program, browse to the 
+python.exe within the python env you use to run the scripts, select the 3090 or whatever gpu you want to use for 
+running the scripts. Example path to the exe to set: C:\Users\YourName\Anaconda3\envs\render_env\python.exe
+
+
 Ran all of these on my PC:
 OS:         Windows 11 Pro
 Processor:	Intel Ultra 9 285K   3.70 GHz
@@ -25,7 +30,7 @@ These notes all apply to preprocessing the meshes for a 256 resolution.
 
 Total meshes: 14,752
 Total storage space for the pre-processed files: 1.6TB (includes the files shown at the end of the notes)
-Total time to process the meshes: 5-6 days
+Total time to process the meshes: 5-6 days using the Blender based rendering scripts. 2-3 days using my fast_render scripts. 
 
 Watertight/Normalizing
     - multi_threaded_to_watertight_mesh.py
@@ -36,10 +41,12 @@ Sharp Edge Sampling
 
 Renders 
     - After using the blender based scripts and thinking it was too slow, I redid the rendering without blender. 
-    - fast_render.py + view_utils.py (non Blender scripts - numpy, OpenGL, OpenCV, trimesh, and PIL)
-        - These should get through the entire stack of meshes in 10% of the time that the Blender based script does
+    - fast_render.py + view_utils.py + fast_render_wrapper.py (non Blender scripts - numpy, OpenGL, OpenCV, trimesh, and PIL)
+        - These should get through the entire stack of meshes in 10% or less of the time that the Blender based script does (about 2 hours for my set of meshes)
         - The output from this script takes up only about 10% of the storage space since I'm saving those as png files
-        - I Still just have the sequential processing for this, concurrent processing version coming soon
+        - The render pops up on the screen during this so its kind of annoying, but its much faster
+        - CPU usage is high for this, I'm running 12 workers with it. (90-100%)
+        - GPU usage is around 25% with 12 workers running.
     - render_wrapper.py + render_script.py (These use Blender, which is kind of slow)
         - 2 1/2 days running with 8 workers 
         - I couldn't figure out how to push more of this to the 3090
@@ -78,7 +85,6 @@ Various other scripts to test things
     - inspect_pt.py (test that the output from the dinov2 model has content)
 
 TODO    
-    - Research better rendering methods and rewrite that script. 
     - Design a DIT and training pipeline
     - Fine tune the pre-trained dora-VAE model 
     - Train a dora-VAE from scratch with my input meshes 

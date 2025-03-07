@@ -5,6 +5,9 @@ from different camera viewpoints using OpenGL, and saves the resulting images.
 It uses argparse to allow users to pass rendering parameters from the command line.
 Rendered files are prefixed with the base name of the OBJ file.
 """
+# import ctypes
+# # Make sure to use the correct path to your DLL.
+# ctypes.CDLL("D:\\dev\\blender_shapenet_render\\gpu_select.dll")
 
 import argparse  # For command-line argument parsing
 import numpy as np
@@ -25,13 +28,14 @@ try:
 except KeyError:
     pass
 
-def create_maps(obj_file, num_views, cam_dist, multisample, resolution):
+def create_maps(obj_file, output_folder, num_views, cam_dist, multisample, resolution):
     """
     Loads a mesh from an OBJ file, renders multiple normal and depth maps,
     and saves the results as PNG files.
 
     Args:
         obj_file (str): Path to the OBJ file.
+        output_folder (str): Folder to save the rendered images.
         num_views (int): Number of different views to render.
         cam_dist (float): Distance of the camera from the object.
         multisample (bool): Enable/Disable multi-sampling for smoother results.
@@ -65,10 +69,13 @@ def create_maps(obj_file, num_views, cam_dist, multisample, resolution):
     else:
         glut.glutInitDisplayMode(glut.GLUT_RGBA | glut.GLUT_DOUBLE | glut.GLUT_DEPTH)
     
+    # Position the window off-screen (e.g., top-left corner far outside the visible area).
+    glut.glutInitWindowPosition(-10000, -10000)
     # Set the window size and create the window.
     glut.glutInitWindowSize(width, height)
     glut.glutCreateWindow(b"Normal and Depth Map Renderer")
-
+    glut.glutHideWindow()  # This hides the window from the screen.
+    
     # If multisampling is enabled, activate the multisample flag and set a hint for higher quality.
     if multisample:
         gl.glEnable(gl.GL_MULTISAMPLE)
@@ -97,7 +104,8 @@ def create_maps(obj_file, num_views, cam_dist, multisample, resolution):
     glut.glutSwapBuffers()
 
     # Loop through each computed camera pose to render the mesh from different viewpoints.
-    for idx, cam_mat in enumerate(poses):
+    # Extend the poses list by one extra iteration using the last pose.
+    for idx, cam_mat in enumerate(poses + [poses[-1]]):
         # Extract the camera position (cx, cy, cz) from the camera matrix.
         cx, cy, cz = cam_mat[:3, 3]
         gl.glLoadIdentity()
@@ -128,7 +136,7 @@ def create_maps(obj_file, num_views, cam_dist, multisample, resolution):
             img_data = np.frombuffer(pixels, dtype=np.uint8).reshape((height, width, 3))
             # OpenGL's coordinate system has the origin at the bottom left so flip vertically.
             img_data = cv2.flip(img_data, 0)
-            Image.fromarray(img_data, mode="RGB").save(f"{obj_base}_view_{idx-1:03d}_normal.png")
+            Image.fromarray(img_data, mode="RGB").save(f"{output_folder}\\{obj_base}_view_{idx-1:03d}_normal.png")
         
         # Save the depth map image for the current view.
         if idx < num_views:
@@ -137,7 +145,7 @@ def create_maps(obj_file, num_views, cam_dist, multisample, resolution):
             depth_data = cv2.flip(depth_data, 0)
             # Normalize depth values to the range [0, 255] for visualization.
             depth_data = ((depth_data - depth_data.min()) / (depth_data.max() - depth_data.min()) * 255).astype(np.uint8)
-            Image.fromarray(depth_data, mode="L").save(f"{obj_base}_view_{idx:03d}_depth.png")
+            Image.fromarray(depth_data, mode="L").save(f"{output_folder}\\{obj_base}_view_{idx:03d}_depth.png")
 
     # Exit the GLUT main loop after rendering is complete.
     glut.glutLeaveMainLoop()
@@ -171,6 +179,11 @@ if __name__ == "__main__":
         '--obj_file', type=str, default="mesh.obj",
         help="Path to the OBJ file to be rendered."
     )
+    # Output folder argument for saving renders.
+    parser.add_argument(
+        '--output_folder', type=str, default="output",
+        help="Path to the render output folder."
+    )
     parser.add_argument(
         '--num_views', type=int, default=36,
         help="Number of different views (angles) to render."
@@ -191,5 +204,9 @@ if __name__ == "__main__":
     # Parse the command-line arguments.
     args = parser.parse_args()
     
+    # Create the output folder if it doesn't exist.
+    if not os.path.exists(args.output_folder):
+        os.makedirs(args.output_folder, exist_ok=True)
+    
     # Call the create_maps function with the arguments provided by the user.
-    create_maps(args.obj_file, args.num_views, args.cam_dist, args.multisample, args.resolution)
+    create_maps(args.obj_file, args.output_folder, args.num_views, args.cam_dist, args.multisample, args.resolution)
