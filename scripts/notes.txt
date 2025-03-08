@@ -40,6 +40,10 @@ Watertight/Normalizing
 Sharp Edge Sampling
     - sharp_sample_wrapper.py + modified_sharp_sample.py 
     - looking at alternatives to blender for faster processing
+    - zip_mesh_and_points.py  
+        - I have added an archiving script to zip these up along with the wateright mesh
+        - These files aren't used in the DIT training but I am keeping them for future experimenting
+        - This should save 30-40% of the storage space for these files ("_normalized.obj", "_sharp_sample.ply", "_sample_points.npz")
 Renders 
     - After using the blender based scripts and thinking it was too slow, I redid the rendering without blender. 
     - fast_render.py + view_utils.py + fast_render_wrapper.py (non Blender scripts - numpy, OpenGL, OpenCV, trimesh, and PIL)
