@@ -31,14 +31,15 @@ These notes all apply to preprocessing the meshes for a 256 resolution.
 Total meshes: 14,752
 Total storage space for the pre-processed files: 1.6TB (includes the files shown at the end of the notes)
 Total time to process the meshes: 5-6 days using the Blender based rendering scripts. 2-3 days using my fast_render scripts. 
-
+renders + features = 368 GB total for 14,752 sets of 36 views using my updated scripts
 Watertight/Normalizing
     - multi_threaded_to_watertight_mesh.py
-    - About 1-2 days to finish this stage + the Sharp Edge Sampling.  
+    - About 1-2 days to finish this stage + the Sharp Edge Sampling. 
+    - still need to update the script fo better concurrent processing 
 
 Sharp Edge Sampling
     - sharp_sample_wrapper.py + modified_sharp_sample.py 
-
+    - looking at alternatives to blender for faster processing
 Renders 
     - After using the blender based scripts and thinking it was too slow, I redid the rendering without blender. 
     - fast_render.py + view_utils.py + fast_render_wrapper.py (non Blender scripts - numpy, OpenGL, OpenCV, trimesh, and PIL)
@@ -47,6 +48,11 @@ Renders
         - The render pops up on the screen during this so its kind of annoying, but its much faster
         - CPU usage is high for this, I'm running 12 workers with it. (90-100%)
         - GPU usage is around 25% with 12 workers running.
+        - 1 hour 53 minutes 
+        - I've added a script to use 7zip to compress the renders
+            - They aren't going to be needed for the dit training but I am keeping them around for experimenting with
+            - png files are already a compressed format, 7zip adds another 5-10% of compression which adds up with large data sets
+            - helps keep the folder less chaotic
     - render_wrapper.py + render_script.py (These use Blender, which is kind of slow)
         - 2 1/2 days running with 8 workers 
         - I couldn't figure out how to push more of this to the 3090
@@ -59,10 +65,14 @@ Renders
     - I went with 36 views for these, one render of the normal map, one render of the depth map for each view
 
 Feature Extraction 
+    - updated_feature_extraction  
+        - 14752/14752 [1:10:16<00:00,  3.50folder/s]
+        - 12 threads
+        - using .npz vs .pt
+        - used the dinov2 small pretrained model
     - feature_extraction.py 
-    - 12 hours running with 8 threads 
-    - You will need to get one of the pre-trained dinov2 models
-    - I used this model: dinov2-with-registers-large
+        - 12 hours running with 8 threads 
+        - I used this model: dinov2-with-registers-large
 
 Latent Samples 
     - multi_thread_latent_extraction.py
@@ -106,16 +116,16 @@ Processed files folder structure (end goal would be to have multiple resolutions
 # │       ├── 256_meshName_view_000_dinov2_features.pt (one per view, npy for faster loading during training)
 # │       ├── 256_meshName_view_000_depth_features.pt (from DINOv2 using the depth map render from this view)
 # │       ├── 256_meshName_view_000_normal_features.pt (from DINOv2 using the normal map render from this view)
-# │       ├── 256_meshName_view_000_depth.exr (rendered depth map of the view)
-# │       ├── 256_meshName_view_000_normal.exr (rendered normal map of the view)
-# │       ├── 256_meshName_view_001_depth.exr
-# │       ├── 256_meshName_view_001_normal.exr
+# │       ├── 256_meshName_view_000_depth.png (rendered depth map of the view)
+# │       ├── 256_meshName_view_000_normal.png (rendered normal map of the view)
+# │       ├── 256_meshName_view_001_depth.png
+# │       ├── 256_meshName_view_001_normal.png
 # │       ├── 256_meshName_view_001_depth_features.pt
 # │       ├── 256_meshName_view_001_normal_features.pt 
-# │       └── ... (up to 256_meshName_view_036_depth.exr/normal.exr/_features.npy/etc )
-# ├── mesh_0002/
-# │   ├── meshName.obj
-# │   └── 256_meshName/
+# │       └── ... (up to 256_meshName_view_036_depth.png/normal.png/_features.npy/etc )
+# ├── meshName2/
+# │   ├── meshName2.obj
+# │   └── 256_meshName2/
 # │         └── ... 
 # └── ... 
 
