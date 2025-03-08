@@ -1,6 +1,7 @@
 import torch
 import os
 from PIL import Image
+import numpy as np
 from transformers import AutoImageProcessor, AutoModel
 import concurrent.futures
 from tqdm import tqdm
@@ -40,18 +41,18 @@ def preprocess_images(image_paths, processor, device):
     return inputs, image_paths
 
 def extract_features(model, inputs, image_paths):
-    """Extract features using the model and save them."""
+    """Extract features using the model and save them efficiently."""
     with torch.no_grad():
-        outputs = model(**inputs)  # Ensure model inference happens on the correct device
-    
-    # Extract feature embeddings
-    features = outputs.last_hidden_state.detach().cpu()  # Move back to CPU before saving
+        outputs = model(**inputs)
+
+    # Extract **only patch tokens** (remove class token)
+    features = outputs.last_hidden_state[:, 1:, :].detach().cpu().half()  # Exclude class token & save as FP16
 
     # Save features for each image
     for i, path in enumerate(image_paths):
-        filename = os.path.splitext(path)[0] + '_features.pt'
-        torch.save(features[i], filename)
-    
+        filename = os.path.splitext(path)[0] + '_features.npz'
+        # torch.save(features[i], filename)  # Efficiently save per image
+        np.savez_compressed(filename, features=features[i].numpy())
     return features.numpy()
 
 def process_folder(folder_path, model, processor, device, progress_bar):
@@ -88,7 +89,7 @@ def process_folder(folder_path, model, processor, device, progress_bar):
 
 def main():
     """Main function to process multiple folders concurrently using a shared model."""
-    root_dir = "D:\\test\\processed"  # Root directory
+    root_dir = "D://test/render"
     subfolders = [os.path.join(root_dir, f) for f in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir, f))]
 
     # Filter only subfolders that have not been processed

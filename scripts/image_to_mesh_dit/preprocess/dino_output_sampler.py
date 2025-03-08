@@ -31,30 +31,18 @@ PATCH_GRID_SIZE = IMAGE_SIZE // PATCH_SIZE  # 32 for 448x448 images
 num_files = 4  # Number of .pt files to randomly select
 
 def get_random_pt_files(folder_path, num_files=4):
-    all_files = [f for f in os.listdir(folder_path) if f.lower().endswith("_features.pt")]
+    all_files = [f for f in os.listdir(folder_path) if f.lower().endswith("_features.npz")]
     if len(all_files) < num_files:
-        raise ValueError(f"Not enough .pt files in the folder {folder_path}. Found {len(all_files)}, need {num_files}.")
+        raise ValueError(f"Not enough _features.npz files in the folder {folder_path}. Found {len(all_files)}, need {num_files}.")
     return random.sample(all_files, num_files)
 
 def load_features(folder_path, file_names):
     feature_data = []
     for name in file_names:
-        features = torch.load(os.path.join(folder_path, name), weights_only=True).numpy()
-
-        # Strip CLS token and register tokens (only keep patch tokens)
-        if features.shape[0] == 256:  # Non-reg models (256 patches)
-            pass  # No CLS token to remove
-        elif features.shape[0] == 257:  # Non-reg models (256 patches + 1 CLS token)
-            features = features[1:]  # Remove CLS token
-        elif features.shape[0] == 261:  # Reg models (256 patches + 1 CLS + 4 reg tokens)
-            features = features[1:-4]  # Remove CLS token and 4 reg tokens
-        else:
-            raise ValueError(f"Unexpected number of tokens: {features.shape[0]}. Expected 257 or 261.")
-
-        if features.shape[0] != PATCH_GRID_SIZE ** 2:
-            raise ValueError(f"Expected {PATCH_GRID_SIZE ** 2} patch tokens, but found {features.shape[0]}.")
-
-        feature_data.append(features)
+        data = np.load(os.path.join(folder_path, name))  # Load each npz file
+        features = data['features']  # Extract stored features
+        feature_data.append(features)  # Append separately for each file
+        print(f"Loaded {name}, shape: {features.shape}, min: {features.min()}, max: {features.max()}")
     return feature_data
 
 def process_features(feature_data):
@@ -78,7 +66,7 @@ def visualize_features(folder_path, file_names, feature_matrices):
     plt.suptitle(f"Feature Extraction Visualization - {model_name}", fontsize=14)
 
     for i, name in enumerate(file_names):
-        base_name = name.replace("_features.pt", "")  # Remove _features.pt suffix
+        base_name = name.replace("_features.npz", "")  # Remove _features.npz suffix
         png_path = os.path.join(folder_path, base_name + ".png")
 
         # Load and display the PNG image (if available)
@@ -105,7 +93,7 @@ def visualize_features(folder_path, file_names, feature_matrices):
     plt.show()
 
 def main():
-    folder_path = "D://test/render/vvMix-98/256_vvMix-98"  # Set your folder path
+    folder_path = "D://test/render/vvMix-99/256_vvMix-99"  # Set your folder path
     file_names = get_random_pt_files(folder_path, num_files)
     feature_data = load_features(folder_path, file_names)
     object_pca, feature_matrices = process_features(feature_data)
