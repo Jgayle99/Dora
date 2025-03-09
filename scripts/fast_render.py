@@ -105,7 +105,7 @@ def create_maps(obj_file, output_folder, num_views, cam_dist, multisample, resol
 
     # Loop through each computed camera pose to render the mesh from different viewpoints.
     # Extend the poses list by one extra iteration using the last pose.
-    for idx, cam_mat in enumerate(poses + [poses[-1]]):
+    for idx, cam_mat in enumerate(poses):
         # Extract the camera position (cx, cy, cz) from the camera matrix.
         cx, cy, cz = cam_mat[:3, 3]
         gl.glLoadIdentity()
@@ -131,21 +131,19 @@ def create_maps(obj_file, output_folder, num_views, cam_dist, multisample, resol
         glut.glutSwapBuffers()
 
         # Save the normal map image (skip the first iteration due to buffer swap timing).
-        if idx > 0:
-            pixels = gl.glReadPixels(0, 0, width, height, gl.GL_RGB, gl.GL_UNSIGNED_BYTE)
-            img_data = np.frombuffer(pixels, dtype=np.uint8).reshape((height, width, 3))
-            # OpenGL's coordinate system has the origin at the bottom left so flip vertically.
-            img_data = cv2.flip(img_data, 0)
-            Image.fromarray(img_data, mode="RGB").save(f"{output_folder}\\{obj_base}_view_{idx-1:03d}_normal.png")
+        pixels = gl.glReadPixels(0, 0, width, height, gl.GL_RGB, gl.GL_UNSIGNED_BYTE)
+        img_data = np.frombuffer(pixels, dtype=np.uint8).reshape((height, width, 3))
+        # OpenGL's coordinate system has the origin at the bottom left so flip vertically.
+        img_data = cv2.flip(img_data, 0)
+        Image.fromarray(img_data, mode="RGB").save(f"{output_folder}\\{obj_base}_view_{idx:03d}_normal.png")
         
         # Save the depth map image for the current view.
-        if idx < num_views:
-            depth_pixels = gl.glReadPixels(0, 0, width, height, gl.GL_DEPTH_COMPONENT, gl.GL_FLOAT)
-            depth_data = np.frombuffer(depth_pixels, dtype=np.float32).reshape((height, width))
-            depth_data = cv2.flip(depth_data, 0)
-            # Normalize depth values to the range [0, 255] for visualization.
-            depth_data = ((depth_data - depth_data.min()) / (depth_data.max() - depth_data.min()) * 255).astype(np.uint8)
-            Image.fromarray(depth_data, mode="L").save(f"{output_folder}\\{obj_base}_view_{idx:03d}_depth.png")
+        depth_pixels = gl.glReadPixels(0, 0, width, height, gl.GL_DEPTH_COMPONENT, gl.GL_FLOAT)
+        depth_data = np.frombuffer(depth_pixels, dtype=np.float32).reshape((height, width))
+        depth_data = cv2.flip(depth_data, 0)
+        # Normalize depth values to the range [0, 255] for visualization.
+        depth_data = ((depth_data - depth_data.min()) / (depth_data.max() - depth_data.min()) * 255).astype(np.uint8)
+        Image.fromarray(depth_data, mode="L").save(f"{output_folder}\\{obj_base}_view_{idx:03d}_depth.png")
 
     # Exit the GLUT main loop after rendering is complete.
     glut.glutLeaveMainLoop()
