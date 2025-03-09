@@ -11,7 +11,7 @@ from tqdm import tqdm
 # ===========================
 model_name = "facebook/dinov2-small"  # Small Non-Reg Model
 device = "cuda" if torch.cuda.is_available() else "cpu"  # Use GPU if available
-DEFAULT_WORKERS = 8  # Default to 8 workers, adjust dynamically
+DEFAULT_WORKERS = 12  # Default to 8 workers, adjust dynamically
 
 # ===========================
 #  LOAD DINOv2 MODEL ONCE
@@ -89,7 +89,7 @@ def process_folder(folder_path, model, processor, device, progress_bar):
 
 def main():
     """Main function to process multiple folders concurrently using a shared model."""
-    root_dir = "D://test/render"
+    root_dir = "D://test/processed"
     subfolders = [os.path.join(root_dir, f) for f in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir, f))]
 
     # Filter only subfolders that have not been processed
