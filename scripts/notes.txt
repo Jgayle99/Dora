@@ -28,6 +28,13 @@ GPU:        MSI Ventus 3x OC 3090 24GB
 
 These notes all apply to preprocessing the meshes for a 256 resolution.
 
+Running the decoder at octree_depth of 8  - 2.1 GB of GPU RAM 27 seconds
+Running the decoder at octree_depth of 9  - 3.9 GB of GPU RAM (had a spike up to 6.1 GB right at the end) 3 1/2 minutes
+Running the decoder at octree_depth of 10 - 18.3 GB of GPU RAM (had a spike up to 23.7 GB right at the end) 30 minutes
+
+I have modified the autoencoder to allow overriding the test_step to export the latent codes and to set the token length of the output. 
+Encoding/collecting latent codes is pretty quick is you use the modified code for the autoencoder and yaml files to override the token length used. < 0.1 sec per
+
 Total meshes: 14,752
 Total storage space for the pre-processed files: 1.6TB (includes the files shown at the end of the notes)
 Total time to process the meshes: 5-6 days using the Blender based rendering scripts. 2-3 days using my fast_render scripts. 
@@ -35,7 +42,7 @@ renders + features = 368 GB total for 14,752 sets of 36 views using my updated s
 Watertight/Normalizing
     - multi_threaded_to_watertight_mesh.py
     - About 1-2 days to finish this stage + the Sharp Edge Sampling. 
-    - still need to update the script fo better concurrent processing 
+    - still need to update the script for better concurrent processing 
 
 Sharp Edge Sampling
     - sharp_sample_wrapper.py + modified_sharp_sample.py 
@@ -132,6 +139,26 @@ Processed files folder structure (end goal would be to have multiple resolutions
 # │   └── 256_meshName2/
 # │         └── ... 
 # └── ... 
+
+
+
+
+
+
+# d/data/
+# ├── meshName/
+# │   └── 256_meshName/
+# │       ├── 256_meshName_latent_sample.npy (output from Dora-VAE - just the shape latents from the tuple) 
+# │       ├── 256_meshName_view_000_depth_features.npz (from DINOv2 using the depth map render from this view)
+# │       ├── 256_meshName_view_000_normal_features.npz (from DINOv2 using the normal map render from this view)
+# │       ├── 256_meshName_view_001_depth_features.npz
+# │       ├── 256_meshName_view_001_normal_features.npz 
+# │       └── ... (up to 256_meshName_view_035_depth_features.npz/normal_features.npz)
+# ├── meshName2/
+# │   └── 256_meshName2/
+# │         └── ... 
+# └── ... 
+
 
 
 

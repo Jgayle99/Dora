@@ -1,11 +1,11 @@
-exp_root_dir: "outputs"
-name: "Dora-VAE"
+exp_root_dir: "D:/dev/data/Dora-VAE-1.1"
+name: "outputs"
 tag: "test"
 seed: 0
 
 data_type: "objaverse-datamodule"
 data:
-  root_dir: "./data/dataset1"
+  root_dir: "D:/dev/data/Dora-VAE-1.1"
   data_type: "sdf" 
   rotate_points: True
   
@@ -19,13 +19,13 @@ data:
 system_type: "shape-autoencoder-system"
 system:
   sample_posterior: true
-  
+  export_latent: true
   shape_model_type: "michelangelo-autoencoder"
   shape_model:
-    pretrained_model_name_or_path: ./ckpts/Dora-VAE-1.1/dora_vae_1_1.ckpt
+    pretrained_model_name_or_path: "D:/dev/ckpts/Dora-VAE-1.1/dora_vae_1_1.ckpt"
     embed_dim: 64
     point_feats: 3   # xyz + normal
-    out_dim: 1 
+    out_dim: 1
     embed_type: "fourier"
     num_freqs: 8
     include_pi: false
@@ -39,6 +39,8 @@ system:
     use_flash: true
     use_checkpoint: true
     use_downsample: true
+    token_length: 256  # 64, 128, 256, 512, 768, 1024, 1280, 2048, 4096
+    set_token_length: true
 
   loss:
     lambda_coarse_logits: 1.0

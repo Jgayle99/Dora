@@ -38,11 +38,14 @@ class PerceiverCrossAttentionEncoder(nn.Module):
                  width: int,
                  heads: int,
                  layers: int,
+                 token_length: int,
                  init_scale: float = 0.25,
                  qkv_bias: bool = True,
                  use_ln_post: bool = False,
                  use_flash: bool = False,
-                 use_checkpoint: bool = False):
+                 use_checkpoint: bool = False,
+                 set_token_length: bool = False,
+                 ):
 
         super().__init__()
 
@@ -50,7 +53,8 @@ class PerceiverCrossAttentionEncoder(nn.Module):
         self.num_latents = num_latents
         self.use_downsample = use_downsample
         self.embed_point_feats = embed_point_feats
-
+        self.set_token_length =  set_token_length
+        self.token_length =  token_length
         if not self.use_downsample:
             self.query = nn.Parameter(torch.randn((num_latents, width)) * 0.02)
 
@@ -115,15 +119,34 @@ class PerceiverCrossAttentionEncoder(nn.Module):
         sharp_data = self.input_proj1(sharp_data) 
 
         if self.use_downsample:
-            ###### fps
-            tokens = np.array([128.0,256.0,384.0,512.0,640.0,1024.0,2048.0])
-            
+            ###### fps [256,512,768,1024,1280,2048,4096] 
+            tokens = np.array([32.0,64.0,128.0,256.0,384.0,512.0,640.0,1024.0,2048.0])
             coarse_ratios = tokens/ N_coarse
             sharp_ratios = tokens/ N_sharp
-            if split =='val':
-                probabilities = np.array([0,0,0,0,0,1,0]) 
-            elif split =='train':
-                probabilities = np.array([ 0.1,0.1,0.1,0.1,0.1,0.3,0.2])
+            if(self.set_token_length):
+                if  (self.token_length == 64):
+                    probabilities = np.array([1,0,0,0,0,0,0,0,0]) 
+                elif  (self.token_length == 128):
+                    probabilities = np.array([0,1,0,0,0,0,0,0,0]) 
+                elif  (self.token_length == 256):
+                    probabilities = np.array([0,0,1,0,0,0,0,0,0])     
+                elif  (self.token_length == 512):
+                    probabilities = np.array([0,0,0,1,0,0,0,0,0]) 
+                elif  self.token_length == 768:
+                    probabilities = np.array([0,0,0,0,1,0,0,0,0])                 
+                elif  self.token_length == 1024:
+                    probabilities = np.array([0,0,0,0,0,1,0,0,0])                  
+                elif  self.token_length == 1280:
+                    probabilities = np.array([0,0,0,0,0,0,1,0,0])                  
+                elif  self.token_length == 2048:
+                    probabilities = np.array([0,0,0,0,0,0,0,1,0])                  
+                elif  self.token_length == 4096:
+                    probabilities = np.array([0,0,0,0,0,0,0,0,1])  
+            else:
+                if split =='val':
+                    probabilities = np.array([0,0,0,0,0,0,0,1,0]) 
+                elif split =='train':
+                    probabilities = np.array([0,0,0.1,0.1,0.1,0.1,0.1,0.3,0.2])
             ratio_coarse = np.random.choice(coarse_ratios, size=1, p=probabilities)[0]
             index = np.where(coarse_ratios == ratio_coarse)[0]
             ratio_sharp = sharp_ratios[index].item()
@@ -245,6 +268,8 @@ class MichelangeloAutoencoder(AutoEncoder):
         use_ln_post: bool = False
         use_flash: bool = False
         use_checkpoint: bool = True
+        set_token_length: bool = False
+        token_length: int = 0
 
     cfg: Config
 
@@ -266,7 +291,9 @@ class MichelangeloAutoencoder(AutoEncoder):
             qkv_bias=self.cfg.qkv_bias,
             use_ln_post=self.cfg.use_ln_post,
             use_flash=self.cfg.use_flash,
-            use_checkpoint=self.cfg.use_checkpoint
+            use_checkpoint=self.cfg.use_checkpoint,
+            set_token_length=self.cfg.set_token_length,
+            token_length=self.cfg.token_length
         )
 
         if self.cfg.embed_dim > 0:

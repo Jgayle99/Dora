@@ -38,14 +38,16 @@ class ShapeAutoEncoderSystem(BaseSystem):
         shape_model_type: str = None
         shape_model: dict = field(default_factory=dict)
         sample_posterior: bool = True
-
+        export_latent: bool = False
+        
     cfg: Config
 
     def configure(self):
         super().configure()
 
         self.shape_model = craftsman.find(self.cfg.shape_model_type)(self.cfg.shape_model)
-
+        self.export_latent = self.cfg.export_latent # whether to save latent codes for test_step vs the mesh + losses
+        
     def forward(self, batch: Dict[str, Any],split: str) -> Dict[str, Any]:
         num = batch["number_sharp"]
         rand_points = batch["rand_points"] 
@@ -220,85 +222,96 @@ class ShapeAutoEncoderSystem(BaseSystem):
         self.eval()
         device = batch['coarse_surface'].device
         out = self(batch,'val')
-        try:
-            mesh_v_f, has_surface = self.shape_model.extract_geometry_by_diffdmc(out["latents"],octree_depth=9)
-            file_path = f"it{self.true_global_step}/{os.path.basename(batch['uid'][0])}".replace(".npz",".obj")
-            if not os.path.exists(file_path):
-                self.save_mesh(
-                    file_path,
-                    mesh_v_f[0][0], mesh_v_f[0][1]
-            )
-        except Exception as e:
-            print(f"ERROR: in processing batch: {batch}. Error: {e}")
-            return
-    
-        threshold = 0
-        overall_outputs = out["overall_logits"]
-        overall_labels = out["overall_target"]
-        overall_labels = (overall_labels >= threshold).float()
-        overall_pred = torch.zeros_like(overall_outputs)
-        overall_pred[overall_outputs>=threshold] = 1
-        overall_accuracy = (overall_pred==overall_labels).float().sum(dim=1) / overall_labels.shape[1]
-        overall_accuracy = overall_accuracy.mean()
-        overall_intersection = (overall_pred * overall_labels).sum(dim=1)
-        overall_union = (overall_pred + overall_labels).gt(0).sum(dim=1)
-        overall_iou = overall_intersection * 1.0 / overall_union + 1e-5
-        overall_iou = overall_iou.mean()
-
-        coarse_outputs = out["coarse_logits"]
-        coarse_labels = out["coarse_target"]
-        coarse_labels = (coarse_labels >= threshold).float()
-        coarse_pred = torch.zeros_like(coarse_outputs)
-        coarse_pred[coarse_outputs>=threshold] = 1
-        coarse_accuracy = (coarse_pred==coarse_labels).float().sum(dim=1) / coarse_labels.shape[1]
-        coarse_accuracy = coarse_accuracy.mean()
-        coarse_intersection = (coarse_pred * coarse_labels).sum(dim=1)
-        coarse_union = (coarse_pred + coarse_labels).gt(0).sum(dim=1)
-        coarse_iou = coarse_intersection * 1.0 / coarse_union + 1e-5
-        coarse_iou = coarse_iou.mean()
-
-        sharp_outputs = out["sharp_logits"]
-        sharp_labels = out["sharp_target"]
-        sharp_labels = (sharp_labels >= threshold).float()
-        sharp_pred = torch.zeros_like(sharp_outputs)
-        sharp_pred[sharp_outputs>=threshold] = 1
-        sharp_accuracy = (sharp_pred==sharp_labels).float().sum(dim=1) / sharp_labels.shape[1]
-        sharp_accuracy = sharp_accuracy.mean()
-        sharp_intersection = (sharp_pred * sharp_labels).sum(dim=1)
-        sharp_union = (sharp_pred + sharp_labels).gt(0).sum(dim=1)
-        sharp_iou = sharp_intersection * 1.0 / sharp_union + 1e-5
-        sharp_iou = sharp_iou.mean()
-
-        mean_value = out["mean_value"]
-        variance_value = out["variance_value"]
-
-        self.log(f"val/overall_accuracy", overall_accuracy,sync_dist=True, on_epoch=True)
-        self.log(f"val/overall_iou", overall_iou,sync_dist=True, on_epoch=True)
-
-        self.log(f"val/coarse_accuracy", coarse_accuracy,sync_dist=True, on_epoch=True)
-        self.log(f"val/coarse_iou", coarse_iou,sync_dist=True, on_epoch=True)
-
-        self.log(f"val/sharp_accuracy", sharp_accuracy,sync_dist=True, on_epoch=True)
-        self.log(f"val/sharp_iou", sharp_iou,sync_dist=True, on_epoch=True)
-
-        self.log(f"val/mean_value", mean_value,sync_dist=True, on_epoch=True)
-        self.log(f"val/variance_value", variance_value,sync_dist=True, on_epoch=True)
-
-        self.log(f"val_{batch['uid'][0]}/overall_accuracy", overall_accuracy, on_epoch=True)
-        self.log(f"val_{batch['uid'][0]}/overall_iou",overall_iou, on_epoch=True)
-
-        self.log(f"val_{batch['uid'][0]}/coarse_accuracy", coarse_accuracy, on_epoch=True)
-        self.log(f"val_{batch['uid'][0]}/coarse_iou", coarse_iou, on_epoch=True)
-
-        self.log(f"val_{batch['uid'][0]}/sharp_accuracy", sharp_accuracy, on_epoch=True)
-        self.log(f"val_{batch['uid'][0]}/sharp_iou", sharp_iou, on_epoch=True)
-
-        self.log(f"val_{batch['uid'][0]}/mean_value", mean_value, on_epoch=True)
-        self.log(f"val_{batch['uid'][0]}/variance_value", variance_value, on_epoch=True)
-
-        torch.cuda.empty_cache()
-        return {"val/loss": out["loss_sharp_logits"]}
         
+        if(self.cfg.export_latent):
+            try:
+                file_path = f"it{self.true_global_step}/{os.path.basename(batch['uid'][0])}".replace(".npz","._latent.npz")
+                if not os.path.exists(file_path):
+                    self.save_latents(file_path,out["latents"])
+            except Exception as e:
+                print(f"ERROR: in processing batch: {batch}. Error: {e}")
+                return
+            torch.cuda.empty_cache()
+            return {"val/loss": out["loss_sharp_logits"]}
+        else:
+            try:
+                mesh_v_f, has_surface = self.shape_model.extract_geometry_by_diffdmc(out["latents"],octree_depth=9)
+                file_path = f"it{self.true_global_step}/{os.path.basename(batch['uid'][0])}".replace(".npz",".obj")
+                if not os.path.exists(file_path):
+                    self.save_mesh(
+                        file_path,
+                        mesh_v_f[0][0], mesh_v_f[0][1]
+                )
+            except Exception as e:
+                print(f"ERROR: in processing batch: {batch}. Error: {e}")
+                return
+        
+            threshold = 0
+            overall_outputs = out["overall_logits"]
+            overall_labels = out["overall_target"]
+            overall_labels = (overall_labels >= threshold).float()
+            overall_pred = torch.zeros_like(overall_outputs)
+            overall_pred[overall_outputs>=threshold] = 1
+            overall_accuracy = (overall_pred==overall_labels).float().sum(dim=1) / overall_labels.shape[1]
+            overall_accuracy = overall_accuracy.mean()
+            overall_intersection = (overall_pred * overall_labels).sum(dim=1)
+            overall_union = (overall_pred + overall_labels).gt(0).sum(dim=1)
+            overall_iou = overall_intersection * 1.0 / overall_union + 1e-5
+            overall_iou = overall_iou.mean()
+
+            coarse_outputs = out["coarse_logits"]
+            coarse_labels = out["coarse_target"]
+            coarse_labels = (coarse_labels >= threshold).float()
+            coarse_pred = torch.zeros_like(coarse_outputs)
+            coarse_pred[coarse_outputs>=threshold] = 1
+            coarse_accuracy = (coarse_pred==coarse_labels).float().sum(dim=1) / coarse_labels.shape[1]
+            coarse_accuracy = coarse_accuracy.mean()
+            coarse_intersection = (coarse_pred * coarse_labels).sum(dim=1)
+            coarse_union = (coarse_pred + coarse_labels).gt(0).sum(dim=1)
+            coarse_iou = coarse_intersection * 1.0 / coarse_union + 1e-5
+            coarse_iou = coarse_iou.mean()
+
+            sharp_outputs = out["sharp_logits"]
+            sharp_labels = out["sharp_target"]
+            sharp_labels = (sharp_labels >= threshold).float()
+            sharp_pred = torch.zeros_like(sharp_outputs)
+            sharp_pred[sharp_outputs>=threshold] = 1
+            sharp_accuracy = (sharp_pred==sharp_labels).float().sum(dim=1) / sharp_labels.shape[1]
+            sharp_accuracy = sharp_accuracy.mean()
+            sharp_intersection = (sharp_pred * sharp_labels).sum(dim=1)
+            sharp_union = (sharp_pred + sharp_labels).gt(0).sum(dim=1)
+            sharp_iou = sharp_intersection * 1.0 / sharp_union + 1e-5
+            sharp_iou = sharp_iou.mean()
+
+            mean_value = out["mean_value"]
+            variance_value = out["variance_value"]
+
+            self.log(f"val/overall_accuracy", overall_accuracy,sync_dist=True, on_epoch=True)
+            self.log(f"val/overall_iou", overall_iou,sync_dist=True, on_epoch=True)
+
+            self.log(f"val/coarse_accuracy", coarse_accuracy,sync_dist=True, on_epoch=True)
+            self.log(f"val/coarse_iou", coarse_iou,sync_dist=True, on_epoch=True)
+
+            self.log(f"val/sharp_accuracy", sharp_accuracy,sync_dist=True, on_epoch=True)
+            self.log(f"val/sharp_iou", sharp_iou,sync_dist=True, on_epoch=True)
+
+            self.log(f"val/mean_value", mean_value,sync_dist=True, on_epoch=True)
+            self.log(f"val/variance_value", variance_value,sync_dist=True, on_epoch=True)
+
+            self.log(f"val_{batch['uid'][0]}/overall_accuracy", overall_accuracy, on_epoch=True)
+            self.log(f"val_{batch['uid'][0]}/overall_iou",overall_iou, on_epoch=True)
+
+            self.log(f"val_{batch['uid'][0]}/coarse_accuracy", coarse_accuracy, on_epoch=True)
+            self.log(f"val_{batch['uid'][0]}/coarse_iou", coarse_iou, on_epoch=True)
+
+            self.log(f"val_{batch['uid'][0]}/sharp_accuracy", sharp_accuracy, on_epoch=True)
+            self.log(f"val_{batch['uid'][0]}/sharp_iou", sharp_iou, on_epoch=True)
+
+            self.log(f"val_{batch['uid'][0]}/mean_value", mean_value, on_epoch=True)
+            self.log(f"val_{batch['uid'][0]}/variance_value", variance_value, on_epoch=True)
+
+            torch.cuda.empty_cache()
+            return {"val/loss": out["loss_sharp_logits"]}
 
 
     def on_validation_epoch_end(self):

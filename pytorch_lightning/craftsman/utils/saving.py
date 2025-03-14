@@ -439,6 +439,29 @@ class SaverMixin:
         return save_path
 
 
+    def convert_data(self, data): 
+        if isinstance(data, torch.Tensor):
+            return data.cpu().numpy()
+        return data
+
+    def save_latents(self, filename, latents) -> str: 
+        """Saves latent codes to an NPZ file, mimicking save_mesh structure.
+
+        Args:
+            latents (torch.Tensor or numpy.ndarray): The latent codes to save.
+            filename (str): The base filename for saving the latents (without path).
+            get_save_path_fn (callable): Function to get the full save path from filename.
+            convert_data_fn (callable): Function to convert data (e.g., to numpy).
+
+        Returns:
+            str: The full save path of the saved latent file.
+        """
+        save_path = self.get_save_path(filename) 
+        latents_converted = self.convert_data(latents)
+        np.savez_compressed(save_path, latent_code=latents_converted) # Save to NPZ
+        print(f"Latent code saved to: {save_path}") # Print save message
+        return save_path
+    
     def save_obj(
         self,
         filename: str,
